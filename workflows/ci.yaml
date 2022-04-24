@@ -1,0 +1,142 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: build-
+  labels:
+    workflows.argoproj.io/archive-strategy: "false"
+spec:
+  entrypoint: ci
+  serviceAccountName: argo
+  volumes:
+  - name: kaniko-secret
+    secret:
+      secretName: regcred
+      items:
+        - key: .dockerconfigjson
+          path: config.json
+  templates:
+  - name: ci
+    dag:
+      tasks:
+      - name: static-tests
+        template: echo
+        arguments:
+          parameters:
+          - name: message
+            value: Run Static Tests
+      - name: units-tests
+        template: echo
+        arguments:
+          parameters:
+          - name: message
+            value: Run Units Tests
+        dependencies:
+        - static-tests
+      - name: get-git-hash
+        template: git-hash
+        arguments:
+          parameters:
+          - name: app_repo
+            value: lordpangan/sample-springboot.git
+          - name: app_name
+            value: sample-springboot
+        dependencies:
+          - units-tests
+      - name: build-container-image
+        template: container-image
+        arguments:
+          parameters:
+          - name: app_repo
+            value: git://github.com/lordpangan/sample-springboot.git
+          - name: container_image
+            value: tykola/hello-spring
+          - name: container_tag
+            value: "{{tasks.get-git-hash.outputs.parameters.hash-param}}"
+        dependencies:
+        - get-git-hash
+      - name: deploy-to-dev
+        template: git-commit
+        arguments:
+          parameters:
+          - name: app_repo
+            value: lordpangan/sample-kubevela-argocd.git
+          - name: app_name
+            value: sample-kubevela-argocd
+          - name: container_name
+            value: hello-spring
+          - name: dockerhub_user
+            value: tykola
+          - name: new_container_tag
+            value: "{{tasks.get-git-hash.outputs.parameters.hash-param}}"
+        dependencies:
+        - build-container-image
+  - name: echo
+    inputs:
+      parameters:
+      - name: message
+    container:
+      image: alpine
+      command: [echo]
+      args:
+      - "{{inputs.parameters.message}}"
+  - name: container-image
+    inputs:
+      parameters:
+      - name: app_repo
+      - name: container_image
+      - name: container_tag
+    container:
+      image: gcr.io/kaniko-project/executor:debug
+      command: [/kaniko/executor]
+      args:
+      - --context={{inputs.parameters.app_repo}}
+      - --destination={{inputs.parameters.container_image}}:{{inputs.parameters.container_tag}}
+      volumeMounts:
+        - name: kaniko-secret
+          mountPath: /kaniko/.docker/
+  - name: git-commit
+    inputs:
+      parameters:
+      - name: app_repo
+      - name: app_name
+      - name: container_name
+      - name: dockerhub_user
+      - name: new_container_tag
+    script:
+      image: bitnami/git:latest
+      env:
+      - name: GIT_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: git-token
+            key: git-token
+            optional: false
+      command: [bash]
+      source: |
+        git config --global user.email "automation@gmail.com" && git clone https://github.com/{{inputs.parameters.app_repo}} && cd {{inputs.parameters.app_name}} && \
+        sed -i 's|{{inputs.parameters.dockerhub_user}}\/{{inputs.parameters.container_name}}:.*|{{inputs.parameters.dockerhub_user}}\/{{inputs.parameters.container_name}}:{{inputs.parameters.new_container_tag}}|g' sample-app.yaml && \
+        git add sample-app.yaml && git commit -m "Update image to {{inputs.parameters.dockerhub_user}}/{{inputs.parameters.container_name}}:{{inputs.parameters.new_container_tag}}" && \
+        git push https://$GIT_TOKEN@github.com/{{inputs.parameters.app_repo}}
+  - name: git-hash
+    inputs:
+      parameters:
+      - name: app_repo
+      - name: app_name
+    script:
+      image: bitnami/git:latest
+      env:
+      - name: GIT_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: git-token
+            key: git-token
+            optional: false
+      command: [bash]
+      source: |
+        git config --global user.email "automation@gmail.com" && git clone https://github.com/{{inputs.parameters.app_repo}} && cd {{inputs.parameters.app_name}} && \
+        git rev-parse --short=10 HEAD > /tmp/hash.txt
+    outputs:
+      parameters:
+      - name: hash-param
+        valueFrom:
+          path: /tmp/hash.txt
