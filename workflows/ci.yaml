@@ -23,15 +23,7 @@ spec:
         arguments:
           parameters:
           - name: message
-            value: Run Static Tests
-      - name: units-tests
-        template: echo
-        arguments:
-          parameters:
-          - name: message
-            value: Run Units Tests
-        dependencies:
-        - static-tests
+            value: Run Static Analysis
       - name: get-git-hash
         template: git-hash
         arguments:
@@ -41,7 +33,7 @@ spec:
           - name: app_name
             value: sample-springboot
         dependencies:
-          - units-tests
+          - static-tests
       - name: build-container-image
         template: container-image
         arguments:
@@ -54,7 +46,7 @@ spec:
             value: "{{tasks.get-git-hash.outputs.parameters.hash-param}}"
         dependencies:
         - get-git-hash
-      - name: deploy-to-dev
+      - name: deploy-to-qa
         template: git-commit
         arguments:
           parameters:
@@ -62,6 +54,8 @@ spec:
             value: lordpangan/sample-kubevela-argocd.git
           - name: app_name
             value: sample-kubevela-argocd
+          - name: env
+            value: qa
           - name: container_name
             value: hello-spring
           - name: dockerhub_user
@@ -70,6 +64,24 @@ spec:
             value: "{{tasks.get-git-hash.outputs.parameters.hash-param}}"
         dependencies:
         - build-container-image
+      - name: integration-tests
+        template: echo
+        arguments:
+          parameters:
+          - name: message
+            value: Run Ingretion Test
+      - name: regression-acceptance-tests
+        template: echo
+        arguments:
+          parameters:
+          - name: message
+            value: Run Regression/Acceptance tests
+      - name: send-results-to-dec
+        template: echo
+        arguments:
+          parameters:
+          - name: message
+            value: Send results to Devs
   - name: echo
     inputs:
       parameters:
@@ -100,6 +112,7 @@ spec:
       - name: app_repo
       - name: app_name
       - name: container_name
+      - name: env
       - name: dockerhub_user
       - name: new_container_tag
     script:
@@ -113,7 +126,7 @@ spec:
             optional: false
       command: [bash]
       source: |
-        git config --global user.email "automation@gmail.com" && git clone https://github.com/{{inputs.parameters.app_repo}} && cd {{inputs.parameters.app_name}} && \
+        git config --global user.email "automation@gmail.com" && git clone https://github.com/{{inputs.parameters.app_repo}} && cd {{inputs.parameters.app_name}}/{{inputs.parameters.env}} && \
         sed -i 's|{{inputs.parameters.dockerhub_user}}\/{{inputs.parameters.container_name}}:.*|{{inputs.parameters.dockerhub_user}}\/{{inputs.parameters.container_name}}:{{inputs.parameters.new_container_tag}}|g' sample-app.yaml && \
         git add sample-app.yaml && git commit -m "Update image to {{inputs.parameters.dockerhub_user}}/{{inputs.parameters.container_name}}:{{inputs.parameters.new_container_tag}}" && \
         git push https://$GIT_TOKEN@github.com/{{inputs.parameters.app_repo}}

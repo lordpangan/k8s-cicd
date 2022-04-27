@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: sample-app
+  name: sample-app-qa
   namespace: argocd
   finalizers:
   - resources-finalizer.argocd.argoproj.io
@@ -10,10 +10,10 @@ spec:
     automated:
       selfHeal: true
   destination:
-    namespace: default
+    namespace: qa3
     server: https://kubernetes.default.svc
   project: default
   source:
-    path: .
+    path: qa
     repoURL: https://github.com/lordpangan/sample-kubevela-argocd.git
     targetRevision: HEAD
