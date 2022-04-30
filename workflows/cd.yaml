@@ -1,0 +1,95 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: deploy-
+  labels:
+    workflows.argoproj.io/archive-strategy: "false"
+spec:
+  entrypoint: cd
+  serviceAccountName: argo
+  templates:
+    - name: cd
+      dag:
+        tasks:
+        - name: grepper
+          template: git-grepper
+          arguments:
+            parameters:
+            - name: app_repo
+              value: lordpangan/sample-kubevela-argocd.git
+            - name: app_name
+              value: sample-kubevela-argocd
+            - name: env
+              value: qa
+            - name: container_name
+              value: hello-spring
+            - name: dockerhub_user
+              value: tykola
+        - name: deploy-to-qa
+          template: git-commit
+          arguments:
+            parameters:
+            - name: app_repo
+              value: lordpangan/sample-kubevela-argocd.git
+            - name: app_name
+              value: sample-kubevela-argocd
+            - name: env
+              value: prod
+            - name: container_name
+              value: hello-spring
+            - name: dockerhub_user
+              value: tykola
+            - name: new_container_tag
+              value: "{{tasks.grepper.outputs.parameters.grep-param}}"
+          dependencies:
+          - grepper
+    - name: git-commit
+      inputs:
+        parameters:
+        - name: app_repo
+        - name: app_name
+        - name: container_name
+        - name: env
+        - name: dockerhub_user
+        - name: new_container_tag
+      script:
+        image: bitnami/git:latest
+        env:
+        - name: GIT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: git-token
+              key: git-token
+              optional: false
+        command: [bash]
+        source: |
+          git config --global user.email "automation@gmail.com" && git clone https://github.com/{{inputs.parameters.app_repo}} && cd {{inputs.parameters.app_name}}/{{inputs.parameters.env}} && \
+          sed -i 's|{{inputs.parameters.dockerhub_user}}\/{{inputs.parameters.container_name}}:.*|{{inputs.parameters.dockerhub_user}}\/{{inputs.parameters.container_name}}:{{inputs.parameters.new_container_tag}}|g' sample-app.yaml && \
+          git add sample-app.yaml && git commit -m "Update image to {{inputs.parameters.dockerhub_user}}/{{inputs.parameters.container_name}}:{{inputs.parameters.new_container_tag}}" && \
+          git push https://$GIT_TOKEN@github.com/{{inputs.parameters.app_repo}}
+    - name: git-grepper
+      inputs:
+        parameters:
+        - name: app_repo
+        - name: app_name
+        - name: container_name
+        - name: env
+        - name: dockerhub_user
+      script:
+        image: bitnami/git:latest
+        env:
+        - name: GIT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: git-token
+              key: git-token
+              optional: false
+        command: [bash]
+        source: |
+          git config --global user.email "automation@gmail.com" && git clone https://github.com/{{inputs.parameters.app_repo}} && cd {{inputs.parameters.app_name}}/{{inputs.parameters.env}} && \
+          grep "image: {{inputs.parameters.dockerhub_user}}/{{inputs.parameters.container_name}}" sample-app.yaml | sed 's/.*://' | tr -d "[:space:]" > /tmp/grep.txt
+      outputs:
+        parameters:
+        - name: grep-param
+          valueFrom:
+            path: /tmp/grep.txt
