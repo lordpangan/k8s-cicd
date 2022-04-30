@@ -50,7 +50,7 @@ spec:
         template: git-commit
         arguments:
           parameters:
-          - name: app_repo
+          - name: app_config_repo
             value: lordpangan/sample-kubevela-argocd.git
           - name: app_name
             value: sample-kubevela-argocd
@@ -70,18 +70,24 @@ spec:
           parameters:
           - name: message
             value: Run Ingretion Test
+        dependencies:
+        - deploy-to-qa
       - name: regression-acceptance-tests
         template: echo
         arguments:
           parameters:
           - name: message
             value: Run Regression/Acceptance tests
-      - name: send-results-to-dec
+        dependencies:
+        - integration-tests
+      - name: send-results-to-dev
         template: echo
         arguments:
           parameters:
           - name: message
             value: Send results to Devs
+        dependencies:
+        - regression-acceptance-tests
   - name: echo
     inputs:
       parameters:
@@ -109,7 +115,7 @@ spec:
   - name: git-commit
     inputs:
       parameters:
-      - name: app_repo
+      - name: app_config_repo
       - name: app_name
       - name: container_name
       - name: env
@@ -126,10 +132,10 @@ spec:
             optional: false
       command: [bash]
       source: |
-        git config --global user.email "automation@gmail.com" && git clone https://github.com/{{inputs.parameters.app_repo}} && cd {{inputs.parameters.app_name}}/{{inputs.parameters.env}} && \
+        git config --global user.email "automation@gmail.com" && git clone https://github.com/{{inputs.parameters.app_config_repo}} && cd {{inputs.parameters.app_name}}/{{inputs.parameters.env}} && \
         sed -i 's|{{inputs.parameters.dockerhub_user}}\/{{inputs.parameters.container_name}}:.*|{{inputs.parameters.dockerhub_user}}\/{{inputs.parameters.container_name}}:{{inputs.parameters.new_container_tag}}|g' sample-app.yaml && \
         git add sample-app.yaml && git commit -m "Update image to {{inputs.parameters.dockerhub_user}}/{{inputs.parameters.container_name}}:{{inputs.parameters.new_container_tag}}" && \
-        git push https://$GIT_TOKEN@github.com/{{inputs.parameters.app_repo}}
+        git push https://$GIT_TOKEN@github.com/{{inputs.parameters.app_config_repo}}
   - name: git-hash
     inputs:
       parameters:
