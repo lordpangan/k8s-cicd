@@ -10,7 +10,7 @@ spec:
     automated:
       selfHeal: true
   destination:
-    namespace: prod3
+    namespace: prod
     server: https://kubernetes.default.svc
   project: default
   source:

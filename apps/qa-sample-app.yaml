@@ -10,7 +10,7 @@ spec:
     automated:
       selfHeal: true
   destination:
-    namespace: qa3
+    namespace: qa
     server: https://kubernetes.default.svc
   project: default
   source:
