@@ -16,30 +16,33 @@ kubectl wait --namespace argocd --for=condition=ready pod --selector=app.kuberne
 ### Install argo-workflows and kubevela apps
 kubectl apply -f cluster-init/cluster-apps/argo-workflow.yaml
 kubectl apply -f cluster-init/cluster-apps/kubevela.yaml
+kubectl apply -f cluster-init/cluster-apps/reloader.yaml
 ```
 
 ## Deploy sample-app
 Next deploy the app that we are going to use for the CICD demo.
 ```
-### Install the trait used for our app
-kubectl apply -f https://raw.githubusercontent.com/lordpangan/kubevela-manifests/main/traits/gateway-ing-url-rewrite.yaml
-### Install the sample-app
-kubectl apply -f apps/sample-app.yaml
+# Install the trait used for our app
+kubectl apply -f apps/cluster-config.yaml
+kubectl apply -f apps/qa-sample-app.yaml
+kubectl apply -f apps/prod-sample-app.yaml
 ```
 
-## Run CI Workflow
+## Run CI Workflow and CD
+
+### Add required Secrets
 Add the regcred(docker secret) and git-token to argo namespace.
 ```
-### Create 'regcred' secret for pushing to docker repo
+# Create 'git-token;' secret commiting to app repo
+kubectl -n argo create secret generic git-token --from-literal=git-token=$GIT_TOKEN
+
+# Create 'regcred' secret for pushing to docker repo
 kubectl --namespace argo \
     create secret \
     docker-registry regcred \
     --docker-username=$DOCKER_USER \
     --docker-password=$DOCKER_USER \
     --docker-email=$$DOCKER_EMAIL
-
-### Create 'git-token;' secret commiting to app repo
-kubectl -n argo create secret generic git-token --from-literal=git-token=$GIT_TOKEN
 ```
 
 Run the CI Workflow
@@ -47,3 +50,7 @@ Run the CI Workflow
 argo -n argo submit workflows/ci.yaml
 ```
 
+Run the CD
+```
+argo -n argo submit workflows/cd.yaml
+```
