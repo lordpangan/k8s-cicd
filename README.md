@@ -1,7 +1,7 @@
 # CICD for Kubeneretes
-
+To follow the [CICD for K8s](https://lordpangan.com/2022/04/24/cicd-for-kubernetes/) write-up, here are the pre-requisites.
 ## Setup Cluster
-To follow our CICD for K8s write-up here are the requirements.
+Setups K8s cluster and install cluster apps.
 ```
 ### Clone the repo
 git clone git@github.com:lordpangan/dev-k8s.git
@@ -45,12 +45,12 @@ kubectl --namespace argo \
     --docker-email=$$DOCKER_EMAIL
 ```
 
-Run the CI Workflow
+### Run the CI Workflow
 ```
 argo -n argo submit workflows/ci.yaml
 ```
 
-Run the CD
+### Run the CD
 ```
 argo -n argo submit workflows/cd.yaml
 ```
